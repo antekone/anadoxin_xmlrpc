@@ -90,7 +90,7 @@ class RemoveAction
 
 		data["data"].each do |item|
 			id = item["cid"].to_i
-			data = @rpc.request("a1.commentRemove", item["cid"].to_i)
+			data = @rpc.request("a1.commentRemove", id)
 			if data["ret"] == true and data["id"].to_i == id
 				puts("Removed comment #{id}.")
 			else

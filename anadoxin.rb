@@ -23,7 +23,7 @@ class ListAction
 		@options = options
 	end
 
-	def listComments()
+	def getComments()
 		scope = @options[:commentScope]
 		count = @options[:count]
 		offset = @options[:offset]
@@ -32,6 +32,12 @@ class ListAction
 
 		data = @rpc.request("a1.commentControl", "list", scope, count, offset)
 		raise RuntimeError if not data
+
+		data
+	end
+
+	def listComments()
+		data = getComments()
 
 		if @options[:printIds]
 			listCommentsDumpIds(data)
@@ -62,6 +68,42 @@ class ListAction
 	end
 end
 
+class RemoveAction
+	def initialize(rpc, options)
+		@rpc = rpc
+		@options = options
+		@list = ListAction.new(rpc, options)
+	end
+
+	def remove()
+		if @options[:domain] == 'comment'
+			return removeListedComments() if not @options[:id]
+			return removeProvidedComments() if @options[:id]
+			raise RuntimeError
+		else
+			raise RuntimeError
+		end
+	end
+
+	def removeListedComments()
+		data = @list.getComments()
+
+		data["data"].each do |item|
+			id = item["cid"].to_i
+			data = @rpc.request("a1.commentRemove", item["cid"].to_i)
+			if data["ret"] == true and data["id"].to_i == id
+				puts("Removed comment #{id}.")
+			else
+				puts("Error removing comment #{id}.")
+			end
+		end
+	end
+
+	def removeProvidedComments()
+		raise RuntimeError
+	end
+end
+
 require_relative 'creds'
 
 options = {
@@ -84,6 +126,11 @@ optparse = OptionParser.new do |opts|
 	opts.on('-r', '--remove=id', 'Action: Remove') do |id|
 		options[:action] = 'remove'
 		options[:id] = id
+	end
+
+	opts.on('--remove-listed', 'Action: Remove') do |d|
+		options[:action] = 'remove'
+		options[:id] = nil
 	end
 
 	opts.on('-a', '--approve=id', 'Action: Approve') do |id|
@@ -122,6 +169,9 @@ rpc = AdxRpcClient.new(USERNAME, PASSWORD)
 if options[:action] == 'list'
 	lister = ListAction.new(rpc, options)
 	exit(true == lister.list ? 0 : 1)
+elsif options[:action] == 'remove'
+	remover = RemoveAction.new(rpc, options)
+	exit(true == remover.remove ? 0 : 1)
 end
 
 =begin

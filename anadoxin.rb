@@ -1,12 +1,73 @@
 require 'xmlrpc/client'
 require 'optparse'
 
+class AdxRpcClient
+	def initialize(user,pass)
+		@user = user
+		@pass = pass
+		@conn = XMLRPC::Client.new("anadoxin.org", "/blog/xmlrpc.php")
+	end
+
+	def request(funcname, *args)
+		@conn.call(funcname, @user, @pass, *args)
+	end
+
+	def rawRequest(funcname, *args)
+		@conn.call(funcname, args)
+	end
+end
+
+class ListAction
+	def initialize(rpc, options)
+		@rpc = rpc
+		@options = options
+	end
+
+	def listComments()
+		scope = @options[:commentScope]
+		count = @options[:count]
+		offset = @options[:offset]
+
+		scope = 'all' if not scope or (scope != 'approved' && scope != 'unapproved')
+
+		data = @rpc.request("a1.commentControl", "list", scope, count, offset)
+		raise RuntimeError if not data
+
+		if @options[:printIds]
+			listCommentsDumpIds(data)
+		else
+			listCommentsNormal(data)
+		end
+	end
+
+	def listCommentsDumpIds(data)
+		puts(data["data"].map { |item| item["cid"] }.join(','))
+	end
+
+	def listCommentsNormal(data)
+		puts("Comments: #{data['count']}")
+		data["data"].each do |item|
+			puts("Comment ID: #{item["cid"]}, subject: '#{item["subject"]}'")
+		end
+	end
+
+	def listPosts()
+	end
+
+	def list()
+		domain = @options[:domain]
+		return listComments if domain == 'comment'
+		return listPosts if domain == 'post'
+		raise RuntimeError
+	end
+end
+
 require_relative 'creds'
 
 options = {
 	:action => nil,
 	:domain => nil,
-	:count => 1,
+	:count => 10,
 	:offset => 0,
 	:printIds => false
 }
@@ -43,11 +104,11 @@ optparse = OptionParser.new do |opts|
 	end
 
 	opts.on('--count=count', 'Get <count> items') do |c|
-		options[:count] = c
+		options[:count] = c.to_i
 	end
 
 	opts.on('--offset=offset', 'Offset <offset>') do |offset|
-		options[:offset] = offset
+		options[:offset] = offset.to_i
 	end
 
 	opts.on('-i', '--ids=range', 'Argument: id range') do |range|
@@ -56,6 +117,15 @@ optparse = OptionParser.new do |opts|
 end
 
 optparse.parse!($*)
+rpc = AdxRpcClient.new(USERNAME, PASSWORD)
+
+if options[:action] == 'list'
+	lister = ListAction.new(rpc, options)
+	exit(true == lister.list ? 0 : 1)
+end
+
+=begin
+exit(0)
 
 server = XMLRPC::Client.new("anadoxin.org", "/blog/xmlrpc.php")
 
@@ -120,3 +190,4 @@ exit(0)
 #	print("(A)ccept, (I)gnore, (R)emove? ")
 #	break
 #end
+=end

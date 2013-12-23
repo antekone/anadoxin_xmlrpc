@@ -75,7 +75,7 @@ class ListAction
 			end
 		end
 
-		return spamRank >= 3
+		return spamRank >= 2
 	end
 
 	def listSpamComments()
@@ -88,7 +88,7 @@ class ListAction
 				spam << item
 			end
 		end
-		return {"data" => spam}
+		return {"data" => spam, "count" => spam.size}
 	end
 
 	def listCommentsDumpIds(data)

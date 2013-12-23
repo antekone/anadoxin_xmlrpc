@@ -21,6 +21,15 @@ class ListAction
 	def initialize(rpc, options)
 		@rpc = rpc
 		@options = options
+
+		@banned = [ 'uggs rea', 'uggs sandals', 'document_srl', 'ugg soldes' ]
+
+		@spamSubject = [ 'ogg', 'vuitton', 'outlet', 'store', 'gloves', 'bank', 'http', 'lvmh', 'louis', 'online', 'tips', 'billiga',
+		                 'pas', 'cher', 'goose', 'canada', '_srl', 'sex', '.com', 'pandora', 'crystal', 'beads', 'charms', '053',
+						 'soldes', 'lv', 'handbags', 'page=1', 'page_1', 'clok', 'people', 'cancel', 'store', 'cheap', 'boots',
+						 'coach', 'factory', 'rea', 'sandals', '/xe/' ]
+
+		@spamBody = [ 'spring', ' bag ', 'night pee', 'cheap', 'a href', 'url=', 'sex', 'ejaculation' ]
 	end
 
 	def getComments()
@@ -28,12 +37,16 @@ class ListAction
 		count = @options[:count]
 		offset = @options[:offset]
 
-		scope = 'all' if not scope or (scope != 'approved' && scope != 'unapproved')
+		if scope == 'spam'
+			listSpamComments()
+		else
+			scope = 'all' if not scope or (scope != 'approved' && scope != 'unapproved')
 
-		data = @rpc.request("a1.commentControl", "list", scope, count, offset)
-		raise RuntimeError if not data
+			data = @rpc.request("a1.commentControl", "list", scope, count, offset)
+			raise RuntimeError if not data
 
-		data
+			data
+		end
 	end
 
 	def listComments()
@@ -44,6 +57,38 @@ class ListAction
 		else
 			listCommentsNormal(data)
 		end
+	end
+
+	def isSpam(item)
+		subject = item['subject'].downcase
+		body = item['body'].downcase
+
+		@banned.each do |s|
+			return true if subject.index(s) != nil
+			return true if body.index(s) != nil
+		end
+
+		spamRank = 0
+		@spamSubject.each do |s|
+			if subject.index(s) != nil
+				spamRank += 1
+			end
+		end
+
+		return spamRank >= 3
+	end
+
+	def listSpamComments()
+		@options[:commentScope] = 'unapproved'
+		data = getComments()
+
+		spam = []
+		data["data"].each do |item|
+			if isSpam(item)
+				spam << item
+			end
+		end
+		return {"data" => spam}
 	end
 
 	def listCommentsDumpIds(data)
@@ -73,6 +118,7 @@ class RemoveAction
 		@rpc = rpc
 		@options = options
 		@list = ListAction.new(rpc, options)
+
 	end
 
 	def remove()
@@ -82,6 +128,18 @@ class RemoveAction
 			raise RuntimeError
 		else
 			raise RuntimeError
+		end
+	end
+
+	def removeSpam()
+		listSpam().each do |spam|
+			id = spam['cid'].to_i
+			data = @rpc.request("a1.commentRemove", id)
+			if data["ret"] == true and data["id"].to_i == id
+				puts("Removed spam #{id}.")
+			else
+				puts("Can't remove spam #{id}.")
+			end
 		end
 	end
 
@@ -111,7 +169,8 @@ options = {
 	:domain => nil,
 	:count => 10,
 	:offset => 0,
-	:printIds => false
+	:printIds => false,
+	:purgeSpam => false
 }
 
 optparse = OptionParser.new do |opts|
@@ -131,6 +190,10 @@ optparse = OptionParser.new do |opts|
 	opts.on('--remove-listed', 'Action: Remove') do |d|
 		options[:action] = 'remove'
 		options[:id] = nil
+	end
+
+	opts.on('--spam', 'Scope: spam comments') do |v|
+		options[:commentScope] = 'spam'
 	end
 
 	opts.on('-a', '--approve=id', 'Action: Approve') do |id|
